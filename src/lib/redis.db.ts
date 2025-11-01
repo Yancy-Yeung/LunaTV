@@ -6,7 +6,9 @@ export class RedisStorage extends BaseRedisStorage {
   constructor() {
     const config = {
       url: process.env.REDIS_URL!,
-      clientName: 'Redis'
+      clientName: 'Redis',
+      // 可选：通过环境变量传入 Redis 密码（例如 REDIS_PASSWORD）
+      password: process.env.REDIS_PASSWORD,
     };
     const globalSymbol = Symbol.for('__MOONTV_REDIS_CLIENT__');
     super(config, globalSymbol);
