@@ -4,23 +4,28 @@ FROM node:20-alpine AS deps
 # 安装必要的构建工具（某些包的可选依赖可能需要）
 RUN apk add --no-cache libc6-compat python3 make g++
 
-# 启用 corepack 并激活 pnpm（Node20 默认提供 corepack）
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# 启用 corepack 并使用 package.json 中指定的 pnpm 版本
+RUN corepack enable
 
 WORKDIR /app
 
-# 仅复制依赖清单，提高构建缓存利用率
+# 复制 package.json 以让 corepack 读取 packageManager 字段
 COPY package.json pnpm-lock.yaml ./
-# 复制 .npmrc 配置文件（如果存在）
-COPY .npmrc* ./
+
+# corepack 会自动使用 package.json 中指定的 pnpm 版本
+RUN corepack install
 
 # 安装所有依赖（含 devDependencies，后续会裁剪）
 RUN pnpm install --frozen-lockfile
 
 # ---- 第 2 阶段：构建项目 ----
 FROM node:20-alpine AS builder
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable
 WORKDIR /app
+
+# 复制 package.json 以让 corepack 读取 packageManager 字段
+COPY package.json ./
+RUN corepack install
 
 # 复制依赖
 COPY --from=deps /app/node_modules ./node_modules
