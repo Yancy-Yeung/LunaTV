@@ -4,28 +4,24 @@ FROM node:20-alpine AS deps
 # 安装必要的构建工具（某些包的可选依赖可能需要）
 RUN apk add --no-cache libc6-compat python3 make g++
 
-# 启用 corepack 并使用 package.json 中指定的 pnpm 版本
-RUN corepack enable
+# 启用 corepack 并准备 pnpm 10.14.0
+RUN corepack enable && corepack prepare pnpm@10.14.0 --activate
 
 WORKDIR /app
 
-# 复制 package.json 以让 corepack 读取 packageManager 字段
+# 复制依赖清单
 COPY package.json pnpm-lock.yaml ./
 
-# corepack 会自动使用 package.json 中指定的 pnpm 版本
-RUN corepack install
+# 调试：显示 pnpm 版本和文件信息
+RUN pnpm --version && ls -la
 
 # 安装所有依赖（含 devDependencies，后续会裁剪）
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile || (echo "=== pnpm install failed ===" && cat /root/.local/share/pnpm/store/v3/store-stats.json 2>/dev/null || true && exit 1)
 
 # ---- 第 2 阶段：构建项目 ----
 FROM node:20-alpine AS builder
-RUN corepack enable
+RUN corepack enable && corepack prepare pnpm@10.14.0 --activate
 WORKDIR /app
-
-# 复制 package.json 以让 corepack 读取 packageManager 字段
-COPY package.json ./
-RUN corepack install
 
 # 复制依赖
 COPY --from=deps /app/node_modules ./node_modules
