@@ -124,6 +124,7 @@ services:
       - PASSWORD=admin_password
       - NEXT_PUBLIC_STORAGE_TYPE=redis
       - REDIS_URL=redis://moontv-redis:6379
+      - REDIS_PASSWORD=redis_password
     networks:
       - moontv-network
     depends_on:
