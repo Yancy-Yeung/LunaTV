@@ -22,6 +22,7 @@ export interface RedisConnectionConfig {
   url: string;
   clientName: string; // 用于日志显示，如 "Redis" 或 "Pika"
   password?: string;
+  database?: number; // Redis数据库编号，默认为0
 }
 
 // 添加Redis操作重试包装器
@@ -115,6 +116,11 @@ export function createRedisClient(
     // 如果提供了密码，添加到客户端配置中（向后兼容）
     if (config.password) {
       clientConfig.password = config.password;
+    }
+
+    // 如果提供了数据库编号，添加到客户端配置中
+    if (config.database !== undefined) {
+      clientConfig.database = config.database;
     }
 
     client = createClient(clientConfig);

@@ -9,6 +9,10 @@ export class RedisStorage extends BaseRedisStorage {
       clientName: 'Redis',
       // 可选：通过环境变量传入 Redis 密码（例如 REDIS_PASSWORD）
       password: process.env.REDIS_PASSWORD,
+      // 可选：通过环境变量传入 Redis 数据库编号（例如 REDIS_DATABASE），默认为0
+      database: process.env.REDIS_DATABASE
+        ? parseInt(process.env.REDIS_DATABASE, 10)
+        : undefined,
     };
     const globalSymbol = Symbol.for('__MOONTV_REDIS_CLIENT__');
     super(config, globalSymbol);
