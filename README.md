@@ -1,5 +1,10 @@
 # MoonTV
 
+项目源自: https://github.com/MoonTechLab/LunaTV
+
+我只是修改了 自定义存储使用 redis 没有不支持密码的问题;
+upstash 实在太慢了, 我就不使用了, 用自定义 redis 代替.
+
 管理面板->配置订阅: => 拉取配置-> 保存
 https://gist.githubusercontent.com/senshinya/5a5cb900dfa888fd61d767530f00fc48/raw/gistfile1.txt
 
