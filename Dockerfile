@@ -16,7 +16,8 @@ COPY package.json pnpm-lock.yaml ./
 RUN pnpm --version && ls -la
 
 # 安装所有依赖（含 devDependencies，后续会裁剪）
-RUN pnpm install --frozen-lockfile || (echo "=== pnpm install failed ===" && cat /root/.local/share/pnpm/store/v3/store-stats.json 2>/dev/null || true && exit 1)
+# 暂时不使用 --frozen-lockfile 以便调试
+RUN pnpm install --prefer-frozen-lockfile
 
 # ---- 第 2 阶段：构建项目 ----
 FROM node:20-alpine AS builder
