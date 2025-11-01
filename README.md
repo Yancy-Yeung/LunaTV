@@ -1,5 +1,8 @@
 # MoonTV
 
+管理面板->配置订阅: => 拉取配置-> 保存
+https://gist.githubusercontent.com/senshinya/5a5cb900dfa888fd61d767530f00fc48/raw/gistfile1.txt
+
 <div align="center">
   <img src="public/logo.png" alt="MoonTV Logo" width="120">
 </div>
@@ -208,6 +211,27 @@ MoonTV 支持标准的苹果 CMS V10 API 格式。
 可借助 [watchtower](https://github.com/containrrr/watchtower) 自动更新镜像容器
 
 dockge/komodo 等 docker compose UI 也有自动更新功能
+
+## 本地开发配置
+
+如果要进行本地开发，请复制 `.env.example` 文件为 `.env.local` 并填入实际配置值：
+
+```bash
+cp .env.example .env.local
+```
+
+然后编辑 `.env.local` 文件，填入你的配置：
+
+```bash
+# 管理员账号
+USERNAME=admin
+PASSWORD=your_password
+
+# 存储配置（三选一）
+NEXT_PUBLIC_STORAGE_TYPE=redis
+REDIS_URL=redis://localhost:6379
+REDIS_PASSWORD=your_redis_password  # 可选
+```
 
 ## 环境变量
 
