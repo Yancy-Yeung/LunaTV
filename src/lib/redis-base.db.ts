@@ -358,12 +358,47 @@ export abstract class BaseRedisStorage implements IStorage {
     return ensureStringArray(result as any[]);
   }
 
+  // async addSearchHistory(userName: string, keyword: string): Promise<void> {
+  //   const key = this.shKey(userName);
+  //   // 先去重
+  //   await this.withRetry(() => this.client.lRem(key, 0, ensureString(keyword)));
+  //   // 插入到最前
+  //   await this.withRetry(() => this.client.lPush(key, ensureString(keyword)));
+  //   // 限制最大长度
+  //   await this.withRetry(() =>
+  //     this.client.lTrim(key, 0, SEARCH_HISTORY_LIMIT - 1),
+  //   );
+  // }
+
+  // 新的去重机制，只保留 title 不同的记录
   async addSearchHistory(userName: string, keyword: string): Promise<void> {
     const key = this.shKey(userName);
-    // 先去重
-    await this.withRetry(() => this.client.lRem(key, 0, ensureString(keyword)));
-    // 插入到最前
+
+    // 解析 keyword 为对象，提取 title
+    const parsedKeyword = JSON.parse(keyword);
+    const titleToMatch = parsedKeyword.title;
+
+    // 获取当前列表
+    const currentHistory = await this.withRetry(() =>
+      this.client.lRange(key, 0, -1),
+    );
+
+    // 移除所有 title 相同的记录
+    for (const item of currentHistory) {
+      try {
+        const parsedItem = JSON.parse(item);
+        if (parsedItem.title === titleToMatch) {
+          await this.withRetry(() => this.client.lRem(key, 0, item));
+        }
+      } catch (e) {
+        // 如果解析失败，跳过（可选：记录错误）
+        console.warn('Failed to parse search history item:', item);
+      }
+    }
+
+    // 插入新的记录到最前
     await this.withRetry(() => this.client.lPush(key, ensureString(keyword)));
+
     // 限制最大长度
     await this.withRetry(() =>
       this.client.lTrim(key, 0, SEARCH_HISTORY_LIMIT - 1),
