@@ -190,14 +190,55 @@ export abstract class BaseRedisStorage implements IStorage {
     return val ? (JSON.parse(val) as PlayRecord) : null;
   }
 
+  // async setPlayRecord(
+  //   userName: string,
+  //   key: string,
+  //   record: PlayRecord,
+  // ): Promise<void> {
+  //   await this.withRetry(() =>
+  //     this.client.set(this.prKey(userName, key), JSON.stringify(record)),
+  //   );
+  // }
+
+  /* 新存储播放记录,去重 */
   async setPlayRecord(
     userName: string,
     key: string,
     record: PlayRecord,
   ): Promise<void> {
+    // 获取所有播放记录
+    const allRecords = await this.getAllPlayRecords(userName);
+
+    // 找到所有 title 相同的记录（排除当前 key）
+    const duplicates = Object.entries(allRecords).filter(
+      ([existingKey, existingRecord]) =>
+        existingRecord.title === record.title && existingKey !== key,
+    );
+
+    // 删除重复的记录
+    for (const [dupKey] of duplicates) {
+      await this.withRetry(() => this.client.del(this.prKey(userName, dupKey)));
+    }
+
+    // 设置新的记录（如果 key 已存在，会覆盖）
     await this.withRetry(() =>
       this.client.set(this.prKey(userName, key), JSON.stringify(record)),
     );
+
+    // 重新获取所有记录（包括新设置的）
+    const updatedRecords = await this.getAllPlayRecords(userName);
+    const entries = Object.entries(updatedRecords);
+
+    // 如果超过 30 条，按 save_time 降序排序（最新的在前），删除多余的
+    if (entries.length > 30) {
+      entries.sort((a, b) => b[1].save_time - a[1].save_time); // 降序，最新的在前
+      const toDelete = entries.slice(30); // 从第31个开始删除
+      for (const [dupKey] of toDelete) {
+        await this.withRetry(() =>
+          this.client.del(this.prKey(userName, dupKey)),
+        );
+      }
+    }
   }
 
   async getAllPlayRecords(
@@ -358,47 +399,12 @@ export abstract class BaseRedisStorage implements IStorage {
     return ensureStringArray(result as any[]);
   }
 
-  // async addSearchHistory(userName: string, keyword: string): Promise<void> {
-  //   const key = this.shKey(userName);
-  //   // 先去重
-  //   await this.withRetry(() => this.client.lRem(key, 0, ensureString(keyword)));
-  //   // 插入到最前
-  //   await this.withRetry(() => this.client.lPush(key, ensureString(keyword)));
-  //   // 限制最大长度
-  //   await this.withRetry(() =>
-  //     this.client.lTrim(key, 0, SEARCH_HISTORY_LIMIT - 1),
-  //   );
-  // }
-
-  // 新的去重机制，只保留 title 不同的记录
   async addSearchHistory(userName: string, keyword: string): Promise<void> {
     const key = this.shKey(userName);
-
-    // 解析 keyword 为对象，提取 title
-    const parsedKeyword = JSON.parse(keyword);
-    const titleToMatch = parsedKeyword.title;
-
-    // 获取当前列表
-    const currentHistory = await this.withRetry(() =>
-      this.client.lRange(key, 0, -1),
-    );
-
-    // 移除所有 title 相同的记录
-    for (const item of currentHistory) {
-      try {
-        const parsedItem = JSON.parse(item);
-        if (parsedItem.title === titleToMatch) {
-          await this.withRetry(() => this.client.lRem(key, 0, item));
-        }
-      } catch (e) {
-        // 如果解析失败，跳过（可选：记录错误）
-        console.warn('Failed to parse search history item:', item);
-      }
-    }
-
-    // 插入新的记录到最前
+    // 先去重
+    await this.withRetry(() => this.client.lRem(key, 0, ensureString(keyword)));
+    // 插入到最前
     await this.withRetry(() => this.client.lPush(key, ensureString(keyword)));
-
     // 限制最大长度
     await this.withRetry(() =>
       this.client.lTrim(key, 0, SEARCH_HISTORY_LIMIT - 1),
