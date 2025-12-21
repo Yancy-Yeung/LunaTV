@@ -3,7 +3,21 @@
 项目源自: https://github.com/MoonTechLab/LunaTV
 
 我只是修改了 自定义存储使用 redis 没有不支持密码的问题;
-upstash 实在太慢了, 我就不使用了, 用自定义 redis 代替.
+upstash 实在太慢了, 我就用不习惯, 用自定义 redis 代替,速度得到提升.
+
+docker run -itd \
+--name lunatv \
+--restart=always \
+--privileged=true \
+-u root -d \
+-p 3000:3000 \
+-e USERNAME=admin \
+-e PASSWORD=my_password \
+-e NEXT_PUBLIC_STORAGE_TYPE=redis \
+-e REDIS_URL=redis://my_redis_address:6379 \
+-e REDIS_PASSWORD=my_redis_password \
+-e REDIS_DATABASE=1 \
+ghcr.io/yancy-yeung/lunatv:latest
 
 管理面板->配置订阅: => 拉取配置-> 保存
 https://gist.githubusercontent.com/senshinya/5a5cb900dfa888fd61d767530f00fc48/raw/gistfile1.txt
