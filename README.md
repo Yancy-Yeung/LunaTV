@@ -20,7 +20,7 @@ docker run -itd \
 ghcr.io/yancy-yeung/lunatv:latest
 
 管理面板->配置订阅: => 拉取配置-> 保存
-https://gist.githubusercontent.com/senshinya/5a5cb900dfa888fd61d767530f00fc48/raw/gistfile1.txt
+https://github.com/FilthySausage/config-tv/blob/9ab9207930be19612b75254aa351517894d55e26/config.json
 
 <div align="center">
   <img src="public/logo.png" alt="MoonTV Logo" width="120">
