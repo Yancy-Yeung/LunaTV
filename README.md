@@ -2,8 +2,8 @@
 
 项目源自: https://github.com/MoonTechLab/LunaTV
 
-我只是修改了 自定义存储使用 redis 没有不支持密码的问题;
-upstash 实在太慢了, 我就用不习惯, 用自定义 redis 代替,速度得到提升.
+我只是修改了 自定义存储使用 redis 不支持密码的问题;
+upstash 实在太慢了, 我就用不习惯, 用自己的 redis 代替,速度得到提升.
 
 docker run -itd \
 --name lunatv \
@@ -94,7 +94,7 @@ https://github.com/FilthySausage/config-tv/blob/9ab9207930be19612b75254aa3515178
 ```yml
 services:
   moontv-core:
-    image: ghcr.io/moontechlab/lunatv:latest
+    image: ghcr.io/yancy-yeung/lunatv:latest
     container_name: moontv-core
     restart: on-failure
     ports:
@@ -128,7 +128,7 @@ volumes:
 ```yml
 services:
   moontv-core:
-    image: ghcr.io/moontechlab/lunatv:latest
+    image: ghcr.io/yancy-yeung/lunatv:latest
     container_name: moontv-core
     restart: on-failure
     ports:
