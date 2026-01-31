@@ -7,6 +7,8 @@ import { Favorite, IStorage, PlayRecord, SkipConfig } from './types';
 
 // 搜索历史最大条数
 const SEARCH_HISTORY_LIMIT = 20;
+// 播放记录最大条数
+const PLAY_RECORD_LIMIT = 30;
 
 // 数据类型转换辅助函数
 function ensureString(value: any): string {
@@ -75,12 +77,50 @@ export class UpstashRedisStorage implements IStorage {
     return val ? (val as PlayRecord) : null;
   }
 
+  // async setPlayRecord(
+  //   userName: string,
+  //   key: string,
+  //   record: PlayRecord
+  // ): Promise<void> {
+  //   await withRetry(() => this.client.set(this.prKey(userName, key), record));
+  // }
+  
+  /* 新存储播放记录,去重 */
   async setPlayRecord(
     userName: string,
     key: string,
     record: PlayRecord
   ): Promise<void> {
+    // 获取所有播放记录
+    const allRecords = await this.getAllPlayRecords(userName);
+
+    // 找到所有 title 相同的记录（排除当前 key）
+    const duplicateKeys = Object.entries(allRecords)
+      .filter(([k, v]) => v.title === record.title && k !== key)
+      .map(([k, v]) => k);
+
+    // 删除重复的播放记录
+    for (const dupKey of duplicateKeys) {
+      await this.deletePlayRecord(userName, dupKey);
+    }
+
+    // 设置新的记录（如果 key 已存在，会覆盖）
     await withRetry(() => this.client.set(this.prKey(userName, key), record));
+
+    // 重新获取所有记录（包括新设置的）
+    const updatedRecords = await this.getAllPlayRecords(userName);
+    const entries = Object.entries(updatedRecords);
+
+    // 如果超过 30 条，按 save_time 降序排序（最新的在前），删除多余的
+    if (entries.length > PLAY_RECORD_LIMIT) {
+      entries.sort(
+        (a, b) => (b[1].save_time ?? 0) - (a[1].save_time ?? 0)
+      );
+      const toDelete = entries.slice(PLAY_RECORD_LIMIT);
+      for (const [dupKey] of toDelete) {
+        await this.deletePlayRecord(userName, dupKey);
+      }
+    }
   }
 
   async getAllPlayRecords(
