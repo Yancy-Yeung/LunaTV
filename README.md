@@ -13,6 +13,7 @@ docker run -itd \
 -p 3000:3000 \
 -e USERNAME=admin \
 -e PASSWORD=my_password \
+-e NEXT_PUBLIC_ENABLE_REGISTER=true \
 -e NEXT_PUBLIC_STORAGE_TYPE=redis \
 -e REDIS_URL=redis://my_redis_address:6379 \
 -e REDIS_PASSWORD=my_redis_password \
@@ -265,6 +266,7 @@ REDIS_DATABASE=1  # 可选，Redis数据库编号，默认为0
 | NEXT_PUBLIC_SITE_NAME               | 站点名称                   | 任意字符串               | MoonTV                                                                                                                     |
 | ANNOUNCEMENT                        | 站点公告                   | 任意字符串               | 本网站仅提供影视信息搜索服务，所有内容均来自第三方网站。本站不存储任何视频资源，不对任何内容的准确性、合法性、完整性负责。 |
 | NEXT_PUBLIC_STORAGE_TYPE            | 播放记录/收藏的存储方式    | redis、kvrocks、upstash  | 无默认，必填字段                                                                                                           |
+| NEXT_PUBLIC_ENABLE_REGISTER         | 是否开启用户注册功能       | true/false               | false                                                                                                                      |
 | KVROCKS_URL                         | kvrocks 连接 url           | 连接 url                 | 空                                                                                                                         |
 | KVROCKS_DATABASE                    | kvrocks 数据库编号（可选） | 0-15                     | 0                                                                                                                          |
 | REDIS_URL                           | redis 连接 url             | 连接 url                 | 空                                                                                                                         |
