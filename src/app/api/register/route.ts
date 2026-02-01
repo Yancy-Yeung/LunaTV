@@ -18,7 +18,7 @@ const STORAGE_TYPE =
 // 生成签名
 async function generateSignature(
   data: string,
-  secret: string
+  secret: string,
 ): Promise<string> {
   const encoder = new TextEncoder();
   const keyData = encoder.encode(secret);
@@ -30,7 +30,7 @@ async function generateSignature(
     keyData,
     { name: 'HMAC', hash: 'SHA-256' },
     false,
-    ['sign']
+    ['sign'],
   );
 
   // 生成签名
@@ -64,17 +64,18 @@ export async function POST(req: NextRequest) {
     if (STORAGE_TYPE === 'localstorage') {
       return NextResponse.json(
         { error: '当前模式不支持注册' },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     const config = await getConfig();
-    // 校验是否开放注册
-    if (!config.UserConfig.AllowRegister) {
+    // 校验是否开放注册 - 从环境变量读取，而不是数据库配置
+    const allowRegister = process.env.NEXT_PUBLIC_ENABLE_REGISTER === 'true';
+    if (!allowRegister) {
       return NextResponse.json({ error: '当前未开放注册' }, { status: 400 });
     }
 
-    const { username, password } = await req.json();
+    const { username, password, userGroup } = await req.json();
 
     if (!username || typeof username !== 'string') {
       return NextResponse.json({ error: '用户名不能为空' }, { status: 400 });
@@ -98,11 +99,23 @@ export async function POST(req: NextRequest) {
       await db.registerUser(username, password);
 
       // 添加到配置中并保存
-      config.UserConfig.Users.push({
+      const newUser: any = {
         username,
         role: 'user',
-      });
+        tags: ['Level01'],
+      };
+
+      // 如果指定了用户组，添加到tags中
+      if (userGroup && userGroup.trim()) {
+        newUser.tags = [userGroup];
+      }
+
+      config.UserConfig.Users.push(newUser);
+      console.log(
+        `[Register] Adding user ${username} to config, total users: ${config.UserConfig.Users.length}`,
+      );
       await db.saveAdminConfig(config);
+      console.log(`[Register] Config saved for user ${username}`);
 
       // 注册成功，设置认证cookie
       const response = NextResponse.json({ ok: true });

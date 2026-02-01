@@ -295,8 +295,9 @@ async function getInitConfig(
 }
 
 export async function getConfig(): Promise<AdminConfig> {
-  // 直接使用内存缓存
-  if (cachedConfig) {
+  // 直接使用内存缓存 - 但在数据库模式不缓存，避免并发问题
+  const storageType = process.env.NEXT_PUBLIC_STORAGE_TYPE || 'localstorage';
+  if (storageType === 'localstorage' && cachedConfig) {
     return cachedConfig;
   }
 
@@ -314,7 +315,12 @@ export async function getConfig(): Promise<AdminConfig> {
   }
   adminConfig = configSelfCheck(adminConfig);
   cachedConfig = adminConfig;
-  db.saveAdminConfig(cachedConfig);
+
+  // 只有在非 localstorage 模式才保存到数据库
+  if (storageType !== 'localstorage') {
+    db.saveAdminConfig(cachedConfig);
+  }
+
   return cachedConfig;
 }
 
