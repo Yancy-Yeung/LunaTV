@@ -103,6 +103,7 @@ export async function POST(req: NextRequest) {
         username,
         role: 'user',
         tags: ['Level01'],
+        banned: false,
       };
 
       // 如果指定了用户组，添加到tags中
