@@ -110,7 +110,7 @@ export async function POST(req: NextRequest) {
         true,
       ); // localstorage 模式包含 password
       const expires = new Date();
-      expires.setDate(expires.getDate() + 30); // 30天过期
+      expires.setDate(expires.getDate() + 365); // 365天过期
 
       response.cookies.set('auth', cookieValue, {
         path: '/',
