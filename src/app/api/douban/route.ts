@@ -72,7 +72,7 @@ export async function GET(request: Request) {
       year: '',
     }));
 
-    console.log('豆瓣分类数据:', list);
+    // console.log('豆瓣分类数据:', list);
 
     const response: DoubanResult = {
       code: 200,
