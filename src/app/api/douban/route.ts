@@ -81,6 +81,8 @@ export async function GET(request: Request) {
     };
 
     const cacheTime = await getCacheTime();
+    console.log(`获取成功,设置缓存时间: ${cacheTime} 秒`);
+
     return NextResponse.json(response, {
       headers: {
         'Cache-Control': `public, max-age=${cacheTime}, s-maxage=${cacheTime}`,
