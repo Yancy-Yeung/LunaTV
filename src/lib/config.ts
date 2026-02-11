@@ -303,6 +303,7 @@ export async function getConfig(): Promise<AdminConfig> {
 
   // 读 db
   let adminConfig: AdminConfig | null = null;
+  let isNewConfig = false;
   try {
     adminConfig = await db.getAdminConfig();
   } catch (e) {
@@ -312,12 +313,17 @@ export async function getConfig(): Promise<AdminConfig> {
   // db 中无配置，执行一次初始化
   if (!adminConfig) {
     adminConfig = await getInitConfig('');
+    isNewConfig = true;
   }
+  const originalConfig = JSON.stringify(adminConfig);
   adminConfig = configSelfCheck(adminConfig);
   cachedConfig = adminConfig;
 
-  // 只有在非 localstorage 模式才保存到数据库
-  if (storageType !== 'localstorage') {
+  // 只有在非 localstorage 模式才保存到数据库，且仅当配置有变化时
+  if (
+    storageType !== 'localstorage' &&
+    (isNewConfig || JSON.stringify(adminConfig) !== originalConfig)
+  ) {
     db.saveAdminConfig(cachedConfig);
   }
 
