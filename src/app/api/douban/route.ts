@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { Redis } from '@upstash/redis';
 
 import { getCacheTime } from '@/lib/config';
 import { fetchDoubanData } from '@/lib/douban';
@@ -60,6 +61,31 @@ export async function GET(request: Request) {
   const target = `https://movie.douban.com/j/search_subjects?type=${type}&tag=${tag}&sort=recommend&page_limit=${pageSize}&page_start=${pageStart}`;
 
   try {
+    // 初始化 Redis 客户端
+    const redis = new Redis({
+      url: process.env.UPSTASH_URL!,
+      token: process.env.UPSTASH_TOKEN!,
+    });
+
+    // 生成缓存键
+    const cacheKey = `douban:${type}:${tag}:${pageSize}:${pageStart}`;
+
+    // 尝试从缓存获取数据
+    const cachedData = await redis.get(cacheKey);
+    if (cachedData) {
+      console.log(`从缓存获取豆瓣数据: ${cacheKey}`);
+      const response: DoubanResult = cachedData as DoubanResult;
+      const cacheTime = await getCacheTime();
+      return NextResponse.json(response, {
+        headers: {
+          'Cache-Control': `public, max-age=${cacheTime}, s-maxage=${cacheTime}`,
+          'CDN-Cache-Control': `public, s-maxage=${cacheTime}`,
+          'Vercel-CDN-Cache-Control': `public, s-maxage=${cacheTime}`,
+          'Netlify-Vary': 'query',
+        },
+      });
+    }
+
     // 调用豆瓣 API
     const doubanData = await fetchDoubanData<DoubanApiResponse>(target);
 
@@ -72,16 +98,16 @@ export async function GET(request: Request) {
       year: '',
     }));
 
-    // console.log('豆瓣分类数据:', list);
-
     const response: DoubanResult = {
       code: 200,
       message: '获取成功',
       list: list,
     };
 
+    // 缓存数据7200秒（2小时）
     const cacheTime = await getCacheTime();
-    console.log(`获取成功,设置缓存时间: ${cacheTime} 秒`);
+    await redis.setex(cacheKey, cacheTime, response);
+    console.log(`获取成功,设置缓存时间: ${cacheTime} 秒，缓存键: ${cacheKey}`);
 
     return NextResponse.json(response, {
       headers: {
@@ -101,6 +127,15 @@ export async function GET(request: Request) {
 
 function handleTop250(pageStart: number) {
   const target = `https://movie.douban.com/top250?start=${pageStart}&filter=`;
+
+  // 初始化 Redis 客户端
+  const redis = new Redis({
+    url: process.env.UPSTASH_URL!,
+    token: process.env.UPSTASH_TOKEN!,
+  });
+
+  // 生成缓存键
+  const cacheKey = `douban:top250:${pageStart}`;
 
   // 直接使用 fetch 获取 HTML 页面
   const controller = new AbortController();
@@ -123,6 +158,22 @@ function handleTop250(pageStart: number) {
 
       if (!fetchResponse.ok) {
         throw new Error(`HTTP error! Status: ${fetchResponse.status}`);
+      }
+
+      // 尝试从缓存获取数据
+      const cachedData = await redis.get(cacheKey);
+      if (cachedData) {
+        console.log(`从缓存获取豆瓣 Top250 数据: ${cacheKey}`);
+        const response: DoubanResult = cachedData as DoubanResult;
+        const cacheTime = await getCacheTime();
+        return NextResponse.json(response, {
+          headers: {
+            'Cache-Control': `public, max-age=${cacheTime}, s-maxage=${cacheTime}`,
+            'CDN-Cache-Control': `public, s-maxage=${cacheTime}`,
+            'Vercel-CDN-Cache-Control': `public, s-maxage=${cacheTime}`,
+            'Netlify-Vary': 'query',
+          },
+        });
       }
 
       // 获取 HTML 内容
@@ -158,7 +209,10 @@ function handleTop250(pageStart: number) {
         list: movies,
       };
 
+      // 缓存数据
       const cacheTime = await getCacheTime();
+      await redis.setex(cacheKey, cacheTime, apiResponse);
+
       return NextResponse.json(apiResponse, {
         headers: {
           'Cache-Control': `public, max-age=${cacheTime}, s-maxage=${cacheTime}`,
