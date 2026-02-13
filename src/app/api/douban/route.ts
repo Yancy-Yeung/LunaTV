@@ -104,16 +104,18 @@ export async function GET(request: Request) {
       list: list,
     };
 
-    // 缓存数据7200秒（2小时）
+    // 缓存数据7200秒（2*4=8小时）
     const cacheTime = await getCacheTime();
-    await redis.setex(cacheKey, cacheTime, response);
-    console.log(`获取成功,设置缓存时间: ${cacheTime} 秒，缓存键: ${cacheKey}`);
+    await redis.setex(cacheKey, cacheTime * 4, response);
+    console.log(
+      `获取成功,设置缓存时间: ${cacheTime * 4} 秒，缓存键: ${cacheKey}`,
+    );
 
     return NextResponse.json(response, {
       headers: {
-        'Cache-Control': `public, max-age=${cacheTime}, s-maxage=${cacheTime}`,
-        'CDN-Cache-Control': `public, s-maxage=${cacheTime}`,
-        'Vercel-CDN-Cache-Control': `public, s-maxage=${cacheTime}`,
+        'Cache-Control': `public, max-age=${cacheTime * 4}, s-maxage=${cacheTime * 4}`,
+        'CDN-Cache-Control': `public, s-maxage=${cacheTime * 4}`,
+        'Vercel-CDN-Cache-Control': `public, s-maxage=${cacheTime * 4}`,
         'Netlify-Vary': 'query',
       },
     });
