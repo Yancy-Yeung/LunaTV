@@ -6,7 +6,7 @@ on:
       keep_count:
         description: 'Number of recent versions to keep (besides latest)'
         required: false
-        default: '3'
+        default: '10'
         type: string
   schedule:
     # Run weekly on Sunday at 2 AM UTC
