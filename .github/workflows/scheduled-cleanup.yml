@@ -1,4 +1,4 @@
-name: Cleanup Old Docker Images
+name: Scheduled Cleanup of Old Container Images
 
 on:
   workflow_dispatch:
