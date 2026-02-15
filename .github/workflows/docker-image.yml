@@ -149,13 +149,13 @@ jobs:
         run: |
           owner=${{ needs.merge.outputs.owner }}
           date_tag=${{ needs.merge.outputs.date_tag }}
-          versions=$(gh api "/orgs/$owner/packages/container/lunatv/versions" --jq '.[] | {id: .id, name: .name}')
+          versions=$(gh api "/users/$owner/packages/container/lunatv/versions" --jq '.[] | {id: .id, name: .name}')
           echo "$versions" | jq -c '.' | while read -r version; do
             id=$(echo "$version" | jq -r '.id')
             name=$(echo "$version" | jq -r '.name')
             if [[ "$name" != "latest" && "$name" != "$date_tag" ]]; then
               echo "Deleting version $name (id: $id)"
-              gh api -X DELETE "/orgs/$owner/packages/container/lunatv/versions/$id"
+              gh api -X DELETE "/users/$owner/packages/container/lunatv/versions/$id"
             fi
           done
 
