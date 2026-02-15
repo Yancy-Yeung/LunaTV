@@ -148,28 +148,47 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           owner=${{ needs.merge.outputs.owner }}
-          date_tag=${{ needs.merge.outputs.date_tag }}
 
-          echo "Current date tag: $date_tag"
           echo "Fetching all package versions..."
 
-          # Get all version IDs that should be deleted (don't have latest or current date tag)
-          delete_ids=$(gh api "/users/$owner/packages/container/lunatv/versions" | \
-            jq -r --arg date_tag "$date_tag" '
-              .[] | 
-              select(.metadata.container.tags != null) |
-              select(.metadata.container.tags | any(. == "latest" or . == $date_tag) | not) |
-              "\(.id)|\(.metadata.container.tags | join(","))"
-            ')
+          # List all versions and keep only:
+          # 1. Versions with 'latest' tag
+          # 2. The 3 most recent versions by created_at timestamp
+          versions_json=$(gh api "/users/$owner/packages/container/lunatv/versions")
 
-          if [ -z "$delete_ids" ]; then
-            echo "No old versions to delete"
-          else
-            echo "$delete_ids" | while IFS='|' read -r id tags; do
+          # Get IDs of versions with 'latest' tag
+          keep_with_latest=$(echo "$versions_json" | jq -r '
+            .[] | 
+            select(.metadata.container.tags != null) |
+            select(.metadata.container.tags | any(. == "latest")) |
+            .id
+          ')
+
+          # Get IDs of the 3 most recent versions
+          keep_recent=$(echo "$versions_json" | jq -r '
+            sort_by(.created_at) | reverse | .[0:3] | .[].id
+          ')
+
+          # Combine keep lists
+          keep_ids=$(echo -e "$keep_with_latest\n$keep_recent" | sort -u)
+
+          echo "Versions to keep:"
+          echo "$keep_ids"
+
+          # Get all version IDs
+          all_ids=$(echo "$versions_json" | jq -r '.[].id')
+
+          # Delete versions not in keep list
+          echo "$all_ids" | while read -r id; do
+            if echo "$keep_ids" | grep -q "^${id}$"; then
+              tags=$(echo "$versions_json" | jq -r --arg id "$id" '.[] | select(.id == ($id | tonumber)) | .metadata.container.tags | join(", ")')
+              echo "Keeping version ID $id (Tags: $tags)"
+            else
+              tags=$(echo "$versions_json" | jq -r --arg id "$id" '.[] | select(.id == ($id | tonumber)) | .metadata.container.tags | join(", ")')
               echo "Deleting version ID $id (Tags: $tags)"
               gh api -X DELETE "/users/$owner/packages/container/lunatv/versions/$id" || echo "Failed to delete version $id"
-            done
-          fi
+            fi
+          done
 
           echo "Cleanup completed"
 
