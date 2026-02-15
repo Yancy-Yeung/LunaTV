@@ -205,6 +205,7 @@ export abstract class BaseRedisStorage implements IStorage {
     userName: string,
     key: string,
     record: PlayRecord,
+    ttl?: number,
   ): Promise<void> {
     // 获取所有播放记录
     const allRecords = await this.getAllPlayRecords(userName);
@@ -221,9 +222,19 @@ export abstract class BaseRedisStorage implements IStorage {
     }
 
     // 设置新的记录（如果 key 已存在，会覆盖）
-    await this.withRetry(() =>
-      this.client.set(this.prKey(userName, key), JSON.stringify(record)),
-    );
+    if (ttl) {
+      await this.withRetry(() =>
+        this.client.setEx(
+          this.prKey(userName, key),
+          ttl,
+          JSON.stringify(record),
+        ),
+      );
+    } else {
+      await this.withRetry(() =>
+        this.client.set(this.prKey(userName, key), JSON.stringify(record)),
+      );
+    }
 
     // 重新获取所有记录（包括新设置的）
     const updatedRecords = await this.getAllPlayRecords(userName);

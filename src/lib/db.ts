@@ -96,7 +96,7 @@ export class DbManager {
     record: PlayRecord,
   ): Promise<void> {
     const key = generateStorageKey(source, id);
-    await this.storage.setPlayRecord(userName, key, record);
+    await this.storage.setPlayRecord(userName, key, record, 86400 * 7); // 7天 TTL
   }
 
   async getAllPlayRecords(userName: string): Promise<{

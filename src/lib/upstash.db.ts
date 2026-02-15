@@ -77,19 +77,12 @@ export class UpstashRedisStorage implements IStorage {
     return val ? (val as PlayRecord) : null;
   }
 
-  // async setPlayRecord(
-  //   userName: string,
-  //   key: string,
-  //   record: PlayRecord
-  // ): Promise<void> {
-  //   await withRetry(() => this.client.set(this.prKey(userName, key), record));
-  // }
-
   /* 新存储播放记录,去重 */
   async setPlayRecord(
     userName: string,
     key: string,
     record: PlayRecord,
+    ttl?: number,
   ): Promise<void> {
     // 获取所有播放记录
     const allRecords = await this.getAllPlayRecords(userName);
@@ -105,7 +98,13 @@ export class UpstashRedisStorage implements IStorage {
     }
 
     // 设置新的记录（如果 key 已存在，会覆盖）
-    await withRetry(() => this.client.set(this.prKey(userName, key), record));
+    if (ttl) {
+      await withRetry(() =>
+        this.client.setex(this.prKey(userName, key), ttl, record),
+      );
+    } else {
+      await withRetry(() => this.client.set(this.prKey(userName, key), record));
+    }
 
     // 重新获取所有记录（包括新设置的）
     const updatedRecords = await this.getAllPlayRecords(userName);
