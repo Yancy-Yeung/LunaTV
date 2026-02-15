@@ -95,6 +95,9 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - build
+    outputs:
+      owner: ${{ steps.lowercase.outputs.owner }}
+      date_tag: ${{ env.DATE_TAG }}
     steps:
       - name: Download digests
         uses: actions/download-artifact@v4
@@ -128,6 +131,32 @@ jobs:
             -t ghcr.io/${{ steps.lowercase.outputs.owner }}/lunatv:${{ env.DATE_TAG }} \
             $(printf 'ghcr.io/${{ steps.lowercase.outputs.owner }}/lunatv@sha256:%s ' *)
 
+  cleanup-packages:
+    runs-on: ubuntu-latest
+    needs: merge
+    if: success()
+    steps:
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Clean up old package versions
+        run: |
+          owner=${{ needs.merge.outputs.owner }}
+          date_tag=${{ needs.merge.outputs.date_tag }}
+          versions=$(gh api "/orgs/$owner/packages/container/lunatv/versions" --jq '.[] | {id: .id, name: .name}')
+          echo "$versions" | jq -c '.' | while read -r version; do
+            id=$(echo "$version" | jq -r '.id')
+            name=$(echo "$version" | jq -r '.name')
+            if [[ "$name" != "latest" && "$name" != "$date_tag" ]]; then
+              echo "Deleting version $name (id: $id)"
+              gh api -X DELETE "/orgs/$owner/packages/container/lunatv/versions/$id"
+            fi
+          done
+
   cleanup-refresh:
     runs-on: ubuntu-latest
     needs:
@@ -141,12 +170,12 @@ jobs:
           repository: ${{ github.repository }}
           retain_days: 0
           keep_minimum_runs: 2
-          
+
   delete-artifacts:
     runs-on: ubuntu-latest
     needs: cleanup-refresh
     steps:
       - uses: geekyeggo/delete-artifact@v5
         with:
-          name: "*"
+          name: '*'
           failOnError: false
