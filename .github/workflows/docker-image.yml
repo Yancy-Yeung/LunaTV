@@ -150,30 +150,28 @@ jobs:
           owner=${{ needs.merge.outputs.owner }}
           date_tag=${{ needs.merge.outputs.date_tag }}
 
-          # Fetch versions with tags
-          versions=$(gh api "/users/$owner/packages/container/lunatv/versions" --jq '.[] | {id: .id, tags: .metadata.container.tags}')
+          echo "Current date tag: $date_tag"
+          echo "Fetching all package versions..."
 
-          # Iterate over versions
-          echo "$versions" | jq -c '.' | while read -r version; do
-            id=$(echo "$version" | jq -r '.id')
-            tags=$(echo "$version" | jq -r '.tags[]')
-            
-            # Check if this version has "latest" or current date tag
-            is_current=false
-            for tag in $tags; do
-              if [[ "$tag" == "latest" || "$tag" == "$date_tag" ]]; then
-                is_current=true
-                break
-              fi
+          # Get all version IDs that should be deleted (don't have latest or current date tag)
+          delete_ids=$(gh api "/users/$owner/packages/container/lunatv/versions" | \
+            jq -r --arg date_tag "$date_tag" '
+              .[] | 
+              select(.metadata.container.tags != null) |
+              select(.metadata.container.tags | any(. == "latest" or . == $date_tag) | not) |
+              "\(.id)|\(.metadata.container.tags | join(","))"
+            ')
+
+          if [ -z "$delete_ids" ]; then
+            echo "No old versions to delete"
+          else
+            echo "$delete_ids" | while IFS='|' read -r id tags; do
+              echo "Deleting version ID $id (Tags: $tags)"
+              gh api -X DELETE "/users/$owner/packages/container/lunatv/versions/$id" || echo "Failed to delete version $id"
             done
-            
-            if [[ "$is_current" == "false" ]]; then
-              echo "Deleting version ID $id (Tags: $(echo $tags | tr '\n' ' '))"
-              gh api -X DELETE "/users/$owner/packages/container/lunatv/versions/$id"
-            else
-              echo "Keeping version ID $id (Tags: $(echo $tags | tr '\n' ' '))"
-            fi
-          done
+          fi
+
+          echo "Cleanup completed"
 
   cleanup-refresh:
     runs-on: ubuntu-latest
