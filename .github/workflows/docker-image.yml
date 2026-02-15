@@ -2,12 +2,6 @@ name: Build & Push Docker image
 
 on:
   workflow_dispatch:
-    inputs:
-      tag:
-        description: 'Docker 标签'
-        required: false
-        default: 'latest'
-        type: string
   push:
     branches: [main, master]
   pull_request:
@@ -95,9 +89,6 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - build
-    outputs:
-      owner: ${{ steps.lowercase.outputs.owner }}
-      date_tag: ${{ env.DATE_TAG }}
     steps:
       - name: Download digests
         uses: actions/download-artifact@v4
