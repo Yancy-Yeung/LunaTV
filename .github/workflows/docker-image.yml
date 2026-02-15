@@ -144,6 +144,8 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Clean up old package versions
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           owner=${{ needs.merge.outputs.owner }}
           date_tag=${{ needs.merge.outputs.date_tag }}
