@@ -1,0 +1,92 @@
+name: Cleanup Old Docker Images
+
+on:
+  workflow_dispatch:
+    inputs:
+      keep_count:
+        description: 'Number of recent versions to keep (besides latest)'
+        required: false
+        default: '3'
+        type: string
+  schedule:
+    # Run weekly on Sunday at 2 AM UTC
+    - cron: '0 2 * * 0'
+
+permissions:
+  packages: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set lowercase repository owner
+        id: lowercase
+        run: echo "owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - name: Clean up old package versions
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          owner=${{ steps.lowercase.outputs.owner }}
+          keep_count=${{ github.event.inputs.keep_count || '3' }}
+
+          echo "Fetching all package versions..."
+          echo "Will keep: 'latest' tag + $keep_count most recent versions"
+
+          # Fetch all versions
+          versions_json=$(gh api "/users/$owner/packages/container/lunatv/versions")
+
+          # Get IDs of versions with 'latest' tag
+          keep_with_latest=$(echo "$versions_json" | jq -r '
+            .[] | 
+            select(.metadata.container.tags != null) |
+            select(.metadata.container.tags | any(. == "latest")) |
+            .id
+          ')
+
+          # Get IDs of the N most recent versions
+          keep_recent=$(echo "$versions_json" | jq -r --arg count "$keep_count" '
+            sort_by(.created_at) | reverse | .[0:($count | tonumber)] | .[].id
+          ')
+
+          # Combine keep lists
+          keep_ids=$(echo -e "$keep_with_latest\n$keep_recent" | sort -u)
+
+          echo "=== Versions to keep ==="
+          echo "$versions_json" | jq -r --argjson keep_ids "$(echo "$keep_ids" | jq -R . | jq -s 'map(tonumber)')" '
+            .[] | 
+            select([.id] | inside($keep_ids)) |
+            "ID: \(.id) | Created: \(.created_at) | Tags: \(.metadata.container.tags | join(", "))"
+          '
+
+          # Get all version IDs
+          all_ids=$(echo "$versions_json" | jq -r '.[].id')
+
+          echo ""
+          echo "=== Starting cleanup ==="
+          deleted_count=0
+          kept_count=0
+
+          # Delete versions not in keep list
+          echo "$all_ids" | while read -r id; do
+            if echo "$keep_ids" | grep -q "^${id}$"; then
+              tags=$(echo "$versions_json" | jq -r --arg id "$id" '.[] | select(.id == ($id | tonumber)) | .metadata.container.tags | join(", ")')
+              echo "✓ Keeping version ID $id (Tags: $tags)"
+              kept_count=$((kept_count + 1))
+            else
+              tags=$(echo "$versions_json" | jq -r --arg id "$id" '.[] | select(.id == ($id | tonumber)) | .metadata.container.tags | join(", ")')
+              echo "✗ Deleting version ID $id (Tags: $tags)"
+              if gh api -X DELETE "/users/$owner/packages/container/lunatv/versions/$id" 2>/dev/null; then
+                echo "  → Deleted successfully"
+                deleted_count=$((deleted_count + 1))
+              else
+                echo "  → Failed to delete"
+              fi
+            fi
+          done
+
+          echo ""
+          echo "=== Cleanup Summary ==="
+          echo "Kept: $kept_count versions"
+          echo "Deleted: $deleted_count versions"
+          echo "Cleanup completed"
