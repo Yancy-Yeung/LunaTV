@@ -1,0 +1,169 @@
+name: Cleanup of package versions
+
+on:
+  workflow_dispatch:
+    inputs:
+      package_name:
+        description: 'Package name (defaults to repository name, optional)'
+        required: false
+        default: ''
+        type: string
+      package_type:
+        description: 'Package type (container, npm, rubygems, etc.). Default: container'
+        required: false
+        default: 'container'
+        type: string
+      keep_count:
+        description: 'Number of recent versions to keep (besides latest)'
+        required: false
+        default: '12'
+        type: string
+      dry_run:
+        description: 'If true, do not delete; just show what would be removed'
+        required: false
+        default: 'false'
+        type: string
+  # schedule:
+  # Run weekly on Sunday at 2 AM UTC
+  # - cron: '0 2 * * 0'
+
+permissions:
+  packages: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set lowercase repository owner
+        id: lowercase
+        run: echo "owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - name: Clean up old package versions
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          owner=${{ steps.lowercase.outputs.owner }}
+          repo="${GITHUB_REPOSITORY#*/}"
+          package_input="${{ github.event.inputs.package_name }}"
+          package_type="${{ github.event.inputs.package_type || 'container' }}"
+          package="${package_input:-$repo}"
+          # if user didn't provide a package_name, normalize the default package to lowercase (GH packages are lowercase)
+          if [ -z "$package_input" ]; then
+            package="$(echo "$package" | tr '[:upper:]' '[:lower:]')"
+          fi
+
+          # normalize keep_count / dry_run (fall back in-shell to avoid expression surprises)
+          keep_count="${{ github.event.inputs.keep_count }}"
+          if [ -z "$keep_count" ]; then keep_count=10; fi
+          dry_run="${{ github.event.inputs.dry_run || 'true' }}"
+          dry_run="$(echo "$dry_run" | tr '[:upper:]' '[:lower:]')"
+
+          echo "Repository: $owner/$repo"
+          echo "Package: $package (type: $package_type)"
+          echo "Will keep: 'latest' tag + $keep_count most recent versions"
+
+          # Track API scope so delete endpoint matches where versions were discovered
+          delete_endpoint_base="/repos/$owner/$repo/packages/$package_type/$package/versions"
+
+          # Fetch all versions (repo-scoped, paginated). Capture stdout/stderr for diagnostics.
+          versions_raw=$(gh api --paginate "/repos/$owner/$repo/packages/$package_type/$package/versions" 2>&1 || true)
+
+          # If API returned an error object like {"message": "..."}, surface it and exit.
+          if printf '%s' "$versions_raw" | jq -e 'type=="object" and has("message")' >/dev/null 2>&1; then
+            echo "GitHub API error: $(printf '%s' "$versions_raw" | jq -r '.message')"
+            echo "Full API output:"
+            printf '%s\n' "$versions_raw"
+            exit 1
+          fi
+
+          # Normalize paginated output into a single JSON array of objects (safe for mixed output)
+          versions_json=$(printf '%s' "$versions_raw" | jq -s 'map(select(type=="array")) | add // map(select(type=="object")) | (if .==null then [] else . end)' 2>/dev/null) || versions_json='[]'
+          total_versions=$(printf '%s' "$versions_json" | jq 'length' 2>/dev/null || echo 0)
+          echo "Found $total_versions package versions from repo-scoped API."
+
+          # If repo-scoped lookup returned nothing, try the owner/user-scoped package endpoint as a fallback
+          if [ "$total_versions" -eq 0 ]; then
+            echo "Repo-scoped API returned 0 versions; trying owner-scoped packages API..."
+            versions_raw_owner=$(gh api --paginate "/users/$owner/packages/$package_type/$package/versions" 2>&1 || true)
+
+            if printf '%s' "$versions_raw_owner" | jq -e 'type=="object" and has("message")' >/dev/null 2>&1; then
+              echo "Owner-scoped API error: $(printf '%s' "$versions_raw_owner" | jq -r '.message')"
+            else
+              versions_json=$(printf '%s' "$versions_raw_owner" | jq -s 'map(select(type=="array")) | add // map(select(type=="object")) | (if .==null then [] else . end)' 2>/dev/null) || versions_json='[]'
+              total_versions=$(printf '%s' "$versions_json" | jq 'length' 2>/dev/null || echo 0)
+              echo "Found $total_versions package versions from owner-scoped API."
+              if [ "$total_versions" -gt 0 ]; then
+                delete_endpoint_base="/users/$owner/packages/$package_type/$package/versions"
+              fi
+            fi
+          fi
+
+          if [ "$total_versions" -eq 0 ]; then
+            echo "No package versions found for $package in $owner/$repo — nothing to do."
+            exit 0
+          fi
+
+          # Build keep IDs (versions with 'latest' tag + N most recent)
+          keep_ids_json=$(echo "$versions_json" | jq -c --arg count "$keep_count" '
+            map(select(type == "object")) as $versions |
+            (
+              [ $versions[] | select((.metadata?.container?.tags? // []) | (if type == "array" then . else [] end) | any(. == "latest")) | .id ]
+              +
+              [ $versions | sort_by(.created_at // "") | reverse | .[0:($count | tonumber)][] | .id ]
+            ) | unique
+          ')
+
+          # Normalize keep_ids_json to an array (defensive)
+          keep_ids_json=$(printf '%s' "$keep_ids_json" | jq -c 'if type=="array" then . else [.] end')
+
+          echo "=== Versions to keep ==="
+          echo "$versions_json" | jq -r --argjson keep_ids "$keep_ids_json" '
+            map(select(type == "object"))[] |
+            select([.id] | inside($keep_ids)) |
+            "ID: \(.id) | Created: \(.created_at) | Tags: \((.metadata?.container?.tags? // []) | (if type=="array" then join(", ") else (if .==null then "" else tostring end) end))"
+          '
+
+          # Build list of IDs to delete (always produce a JSON array)
+          to_delete_json=$(printf '%s' "$versions_json" | jq -c --argjson keep_ids "$keep_ids_json" 'map(select(type=="object")) | map(select([.id] | inside($keep_ids) | not)) | map(.id)')
+
+          # Defensive printing: handle non-array safely
+          keep_ids_count=$(printf '%s' "$keep_ids_json" | jq 'if type=="array" then length else 1 end')
+          to_delete_count=$(printf '%s' "$to_delete_json" | jq 'if type=="array" then length else (if .==null then 0 else 1 end) end')
+          echo "Keep IDs (count=$keep_ids_count): $(printf '%s' "$keep_ids_json" | jq -c 'if type=="array" then . else [.] end')"
+          echo "To-delete IDs (count=$to_delete_count): $(printf '%s' "$to_delete_json" | jq -r 'if type=="array" then join(", ") elif .==null then "" else tostring end')"
+
+          echo ""
+          echo "=== Starting cleanup ==="
+          deleted_count=0
+
+          # Use bash array to avoid subshell counter issues
+          mapfile -t delete_ids < <(printf '%s' "$to_delete_json" | jq -r 'if type=="array" then .[] elif .==null then empty else . end')
+          if [ ${#delete_ids[@]} -eq 0 ]; then
+            echo "Nothing to delete (keep_count covers all versions)."
+          else
+            echo "Deleting ${#delete_ids[@]} versions (dry_run=$dry_run)"
+            for id in "${delete_ids[@]}"; do
+              tags=$(printf '%s' "$versions_json" | jq -r --arg id "$id" '.[] | select(.id == ($id | tonumber)) | ((.metadata?.container?.tags?) // []) | (if type=="array" then join(", ") else (if .==null then "" else tostring end) end)')
+              echo "✗ Deleting version ID $id (Tags: $tags)"
+              if [ "$dry_run" = "true" ]; then
+                echo "  → dry-run: not deleted"
+                continue
+              fi
+
+              if delete_message=$(gh api -X DELETE "$delete_endpoint_base/$id" 2>&1 >/dev/null); then
+                echo "  → Deleted successfully"
+                deleted_count=$((deleted_count + 1))
+              else
+                echo "  → Failed to delete: $delete_message"
+              fi
+            done
+          fi
+
+          kept_count=$(printf '%s' "$versions_json" | jq 'length')
+          kept_count=$((kept_count - deleted_count))
+
+          echo ""
+          echo "=== Cleanup Summary ==="
+          echo "Kept: $kept_count versions"
+          echo "Deleted: $deleted_count versions"
+          echo "Cleanup completed"
