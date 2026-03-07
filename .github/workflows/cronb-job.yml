@@ -1,0 +1,35 @@
+# .github/workflows/wakeup.yml
+on:
+  schedule:
+    # 每天 UTC 时间 0 点运行 (北京时间早上8点)
+    - cron: '0 0 * * *'
+  # 也可以手动触发
+  workflow_dispatch:
+
+jobs:
+  access-hugging-face-space:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install agent-browser
+        run: npm install -g agent-browser
+
+      - name: Install Playwright browsers
+        run: agent-browser install --with-deps
+
+      - name: Go to the hugging face space
+        run: |
+          agent-browser open ${{ secrets.HUGGING_FACE_SPACE_URL }}
+          # 等待页面加载出包含 "Sign in" 的文字，你可以改为你页面上独有的文字
+          agent-browser wait --text "Sign in"
+          agent-browser screenshot page.png
+          agent-browser close
+
+      - name: Notify Discord on done access
+        if: success()
+        run: |
+          curl --fail-with-body -sS -X POST \
+            -F 'payload_json={"content":"Hugging Face access job done."}' \
+            -F "file1=@page.png;type=image/png" \
+            "${{ secrets.DISCORD_WEBHOOK_URL }}"
