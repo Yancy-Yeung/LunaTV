@@ -1,4 +1,4 @@
-# .github/workflows/wakeup.yml
+# Wakeup huggingFace
 on:
   schedule:
     # 每天 UTC 时间 0 点运行 (北京时间早上8点)
@@ -21,8 +21,8 @@ jobs:
       - name: Go to the hugging face space
         run: |
           agent-browser open ${{ secrets.HUGGING_FACE_SPACE_URL }}
-          # 等待页面加载出包含 "Sign in" 的文字，你可以改为你页面上独有的文字
-          agent-browser wait --text "Sign in"
+          # 等待页面加载出包含 "MoonTV" 的文字，你可以改为你页面上独有的文字
+          agent-browser wait --text "MoonTV"
           agent-browser screenshot page.png
           agent-browser close
 
