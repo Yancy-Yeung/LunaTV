@@ -1,4 +1,4 @@
-# Wakeup huggingFace
+name: Wakeup huggingFace
 on:
   schedule:
     # 每天 UTC 时间 0 点运行 (北京时间早上8点)
