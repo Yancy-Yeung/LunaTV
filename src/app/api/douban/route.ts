@@ -61,17 +61,19 @@ export async function GET(request: Request) {
   const target = `https://movie.douban.com/j/search_subjects?type=${type}&tag=${tag}&sort=recommend&page_limit=${pageSize}&page_start=${pageStart}`;
 
   try {
-    // 初始化 Redis 客户端
-    const redis = new Redis({
-      url: process.env.UPSTASH_URL!,
-      token: process.env.UPSTASH_TOKEN!,
-    });
+    // 初始化 Redis 客户端（仅当 Upstash 环境变量已配置时才启用缓存）
+    const upstashUrl = process.env.UPSTASH_URL;
+    const upstashToken = process.env.UPSTASH_TOKEN;
+    const redis =
+      upstashUrl && upstashToken
+        ? new Redis({ url: upstashUrl, token: upstashToken })
+        : null;
 
     // 生成缓存键
     const cacheKey = `douban:${type}:${tag}:${pageSize}:${pageStart}`;
 
     // 尝试从缓存获取数据
-    const cachedData = await redis.get(cacheKey);
+    const cachedData = redis ? await redis.get(cacheKey) : null;
     if (cachedData) {
       console.log(`从缓存获取豆瓣数据: ${cacheKey}`);
       const response: DoubanResult = cachedData as DoubanResult;
@@ -106,7 +108,7 @@ export async function GET(request: Request) {
 
     // 缓存数据7200秒（2*4=8小时）
     const cacheTime = await getCacheTime();
-    await redis.setex(cacheKey, cacheTime * 4, response);
+    if (redis) await redis.setex(cacheKey, cacheTime * 4, response);
     console.log(
       `获取成功,设置缓存时间: ${cacheTime * 4} 秒，缓存键: ${cacheKey}`,
     );
@@ -130,11 +132,13 @@ export async function GET(request: Request) {
 function handleTop250(pageStart: number) {
   const target = `https://movie.douban.com/top250?start=${pageStart}&filter=`;
 
-  // 初始化 Redis 客户端
-  const redis = new Redis({
-    url: process.env.UPSTASH_URL!,
-    token: process.env.UPSTASH_TOKEN!,
-  });
+  // 初始化 Redis 客户端（仅当 Upstash 环境变量已配置时才启用缓存）
+  const upstashUrl = process.env.UPSTASH_URL;
+  const upstashToken = process.env.UPSTASH_TOKEN;
+  const redis =
+    upstashUrl && upstashToken
+      ? new Redis({ url: upstashUrl, token: upstashToken })
+      : null;
 
   // 生成缓存键
   const cacheKey = `douban:top250:${pageStart}`;
@@ -163,7 +167,7 @@ function handleTop250(pageStart: number) {
       }
 
       // 尝试从缓存获取数据
-      const cachedData = await redis.get(cacheKey);
+      const cachedData = redis ? await redis.get(cacheKey) : null;
       if (cachedData) {
         console.log(`从缓存获取豆瓣 Top250 数据: ${cacheKey}`);
         const response: DoubanResult = cachedData as DoubanResult;
@@ -213,7 +217,7 @@ function handleTop250(pageStart: number) {
 
       // 缓存数据
       const cacheTime = await getCacheTime();
-      await redis.setex(cacheKey, cacheTime, apiResponse);
+      if (redis) await redis.setex(cacheKey, cacheTime, apiResponse);
 
       return NextResponse.json(apiResponse, {
         headers: {
