@@ -1,10 +1,10 @@
 name: Wakeup huggingFace
-on:
-  schedule:
+# on:
+  # schedule:
     # 每天 UTC 时间 0 点运行 (北京时间早上8点)
-    - cron: '0 0 * * *'
+    # - cron: '0 0 * * *'
   # 也可以手动触发
-  workflow_dispatch:
+  # workflow_dispatch:
 
 jobs:
   access-hugging-face-space:
