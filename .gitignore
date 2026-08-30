@@ -30,6 +30,10 @@ yarn-error.log*
 .env
 .env*.local
 
+# local dev caches (sandboxed corepack/pnpm)
+/.corepack
+/.pnpm-store
+
 # vercel
 .vercel
 
